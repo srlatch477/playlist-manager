@@ -1,0 +1,142 @@
+name: build installers
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-jar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: build jar
+        run: mvn clean package
+
+      - name: upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: jar
+          path: target/*jar
+
+  windows:
+    needs: build-jar
+    runs-on: windows-latest
+
+    steps:
+      - name: download jar
+        uses: actions/download-artifact@v4
+        with:
+          name: jar
+          path: target
+
+      - name: setup java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: build msi
+        run: |
+          jpackage `
+            --type msi `
+            --name "Playlist Manager" `
+            --app-version 1.0.0 `
+            --input target `
+            --main-jar playlist-manager-1.0.jar `
+            --main-class lt.kuzya.playlistmanager.Main `
+            --win-menu `
+            --win-shortcut `
+            --dest dist
+
+      - name: upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/*.msi
+
+  ubuntu:
+    needs: build-jar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: download jar
+        uses: actions/download-artifact@v4
+        with:
+          name: jar
+          path: target
+
+      - name: setup java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: build deb
+        run: |
+          jpackage \
+            --type deb \
+            --name playlist-manager \
+            --app-version 1.0.0 \
+            --input target \
+            --main-jar playlist-manager-1.0.jar \
+            --main-class lt.kuzya.playlistmanager.Main \
+            --dest dist
+
+      - name: upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-installer
+          path: dist/*.deb
+
+  fedora:
+    needs: build-jar
+    runs-on: ubuntu-latest
+
+    container: fedora:latest
+
+    steps:
+      - name: install tools
+        run: |
+          dnf install -y git wget tar gzip rpm
+
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup java
+        run: |
+          dnf install -y java-25-openjdk-devel
+
+      - name: build jar
+        run: |
+          ./mvnw clean package
+
+      - name: build rpm
+        run: |
+          jpackage \
+            --type rpm \
+            --name playlist-manager \
+            --app-version 1.0.0 \
+            --input target \
+            --main-jar playlist-manager-1.0.jar \
+            --main-class lt.kuzya.playlistmanager.Main \
+            --dest dist
+
+      - name: upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedora-installer
+          path: dist/*.rpm
